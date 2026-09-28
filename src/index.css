@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --ink: #00484e;
+    --coral: #e8806a;
+    --bg: #f1f6f2;
+    --card: #fdfbfa;
+    --mut: #5f7377;
+    --line: #b7cdc3;
+    --free: #0a6b45;
+    --freebg: #cfe8dc;
+    --busybg: #fcdcd3;
+    --busyink: #d4644c;
+    --soon: #b7791f;
+  }
+
+  body {
+    font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg);
+    color: var(--ink);
+  }
+}
+
+/* 3D Isometric Scene Styling */
+.perspective-stage {
+  perspective: 2200px;
+  perspective-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.scene-wrapper {
+  position: relative;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.15s ease-out;
+}
+
+.building-block {
+  position: absolute;
+  top: -35px;
+  height: 70px;
+  transform-style: preserve-3d;
+}
+
+.floor-slice {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #b7cdc3;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00484e;
+}
