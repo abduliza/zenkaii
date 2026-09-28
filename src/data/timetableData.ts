@@ -305,8 +305,7 @@ export function calculateRoomStatus(
   }
 
   // Not currently occupied. Check if upcoming class breaks the required free duration
-  const requiredFreeThreshold = tMinutes + Math.max(requiredFreeDurationMin, 1);
-  if (nextClass && nextClass.s < requiredFreeThreshold) {
+  if (requiredFreeDurationMin > 0 && nextClass && nextClass.s < tMinutes + requiredFreeDurationMin) {
     const isStartingSoon = nextClass.s - tMinutes <= 30;
     return {
       roomId,
@@ -315,7 +314,7 @@ export function calculateRoomStatus(
       until: nextClass.s,
       kind: 'free',
       isStartingSoon,
-      text: `Free now, but ${nextClass.sec} (${nextClass.p}) starts at ${format12Hour(nextClass.s)}`,
+      text: `Free now, but ${nextClass.p} · ${nextClass.sec} starts ${format12Hour(nextClass.s)}`,
       nextClass,
     };
   }
@@ -329,8 +328,8 @@ export function calculateRoomStatus(
     kind: 'free',
     isStartingSoon,
     text: nextClass
-      ? `Free until ${format12Hour(nextClass.s)} (Next: ${nextClass.sec})`
-      : 'No more classes scheduled today',
+      ? `Free until ${format12Hour(nextClass.s)} · ${nextClass.p} · ${nextClass.sec}`
+      : 'No more classes today',
     nextClass,
   };
 }
@@ -366,8 +365,8 @@ export function parseNaturalQuery(raw: string): ParsedQuery {
   const s = raw.toLowerCase().trim();
   const res: ParsedQuery = { tagsSummary: [] };
 
-  // Specific room lookup
-  const roomMatch = s.match(/(?:room|lab|hall)?\s*(tb\s*106|\b\d{3}\b)/i);
+  // Specific room lookup (e.g., 518, 602, TB106)
+  const roomMatch = s.match(/(?:room|lab|hall)?\s*(tb\s*106|\b[1-7]\d{2}\b)/i);
   if (roomMatch) {
     const rm = roomMatch[1].replace(/\s+/g, '').toUpperCase();
     if (ALL_ROOM_IDS.includes(rm)) {
@@ -447,10 +446,22 @@ export function parseNaturalQuery(raw: string): ParsedQuery {
   }
 
   // Day
-  const foundDay = DAYS.find((d) => new RegExp(`\\b${d.toLowerCase()}`).test(s));
-  if (foundDay) {
-    res.day = foundDay;
-    res.tagsSummary.push(FULL_DAYS[foundDay]);
+  const dayPatterns: [RegExp, DayOfWeek][] = [
+    [/\b(?:mon|monday)\b/i, 'Mon'],
+    [/\b(?:tue|tues|tuesday)\b/i, 'Tue'],
+    [/\b(?:wed|wednesday)\b/i, 'Wed'],
+    [/\b(?:thu|thur|thurs|thursday)\b/i, 'Thu'],
+    [/\b(?:fri|friday)\b/i, 'Fri'],
+    [/\b(?:sat|saturday)\b/i, 'Sat'],
+    [/\b(?:sun|sunday)\b/i, 'Sun'],
+  ];
+
+  for (const [pattern, d] of dayPatterns) {
+    if (pattern.test(s)) {
+      res.day = d;
+      res.tagsSummary.push(FULL_DAYS[d]);
+      break;
+    }
   }
 
   return res;

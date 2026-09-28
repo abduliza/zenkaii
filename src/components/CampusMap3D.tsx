@@ -1,16 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ZoomIn,
   ZoomOut,
   Maximize2,
   Compass,
   Layers,
-  Info,
   Clock,
   Share2,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
+  Calendar,
 } from 'lucide-react';
 import {
   RoomStatus,
@@ -18,6 +15,7 @@ import {
   ALL_ROOM_IDS,
   getFloorName,
   format12Hour,
+  formatCountdown,
   DayOfWeek,
 } from '../data/timetableData';
 
@@ -27,7 +25,9 @@ interface CampusMap3DProps {
   selectedRoomId: string | null;
   currentDay: DayOfWeek;
   currentTimeMinutes: number;
+  currentSecondCounter: number;
   onSelectRoom: (roomId: string) => void;
+  onOpenDetailModal: (roomId: string) => void;
   onSelectFloor: (floor: number | null) => void;
   onShareSquad: (roomId: string) => void;
 }
@@ -38,7 +38,9 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
   selectedRoomId,
   currentDay,
   currentTimeMinutes,
+  currentSecondCounter,
   onSelectRoom,
+  onOpenDetailModal,
   onSelectFloor,
   onShareSquad,
 }) => {
@@ -49,9 +51,14 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
 
   const stageRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ isDragging: boolean; startX: number; startY: number; initPanX: number; initPanY: number } | null>(null);
+  const dragRef = useRef<{
+    isDragging: boolean;
+    startX: number;
+    startY: number;
+    initPanX: number;
+    initPanY: number;
+  } | null>(null);
 
-  // Group rooms by floor
   const istFloors = [1, 2, 3, 4, 5, 6, 7];
   const tbRooms = ALL_ROOM_IDS.filter((r) => ROOM_METADATA[r]?.floor === 8);
 
@@ -66,7 +73,6 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
     setRotateZ(-25);
   };
 
-  // Pointer drag for panning the 3D scene
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button, input')) return;
     dragRef.current = {
@@ -76,7 +82,6 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
       initPanX: panX,
       initPanY: panY,
     };
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -87,7 +92,7 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
     setPanY(dragRef.current.initPanY + dy);
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
+  const handlePointerUp = () => {
     if (dragRef.current) {
       dragRef.current.isDragging = false;
       dragRef.current = null;
@@ -101,7 +106,7 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
 
   const getTileStyle = (roomId: string) => {
     const s = roomStatuses[roomId];
-    if (!s) return { bg: '#e8806a', isFree: false, isSoon: false };
+    if (!s) return { bg: '#e8806a', isFree: false, isSoon: false, isFilteredOut: false };
 
     const isFilteredOut = selectedFloor !== null && s.floor !== selectedFloor;
     const isSoon = s.free && s.until !== null && s.until - currentTimeMinutes <= 30;
@@ -123,6 +128,13 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
   };
 
   const selectedRoomStatus = selectedRoomId ? roomStatuses[selectedRoomId] : null;
+
+  // Compute countdown in seconds for selected room
+  let countdownSeconds: number | null = null;
+  if (selectedRoomStatus && selectedRoomStatus.until !== null) {
+    const targetSeconds = selectedRoomStatus.until * 60;
+    countdownSeconds = Math.max(0, targetSeconds - currentSecondCounter);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -173,7 +185,7 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onWheel={handleWheel}
-          style={{ height: '620px' }}
+          style={{ height: '580px' }}
           className="w-full flex items-center justify-center cursor-grab active:cursor-grabbing perspective-stage touch-none relative"
         >
           <div
@@ -323,7 +335,7 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
 
         {/* Hover room preview tooltip badge */}
         {hoveredRoom && (
-          <div className="absolute bottom-4 left-4 z-20 pointer-events-none bg-white/95 backdrop-blur-md border border-[#b7cdc3] rounded-xl px-3.5 py-2 shadow-lg max-w-xs animate-in fade-in duration-100">
+          <div className="absolute bottom-16 left-4 z-20 pointer-events-none bg-white/95 backdrop-blur-md border border-[#b7cdc3] rounded-xl px-3.5 py-2 shadow-lg max-w-xs animate-in fade-in duration-100">
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-[#00484e] text-sm">
                 {ROOM_METADATA[hoveredRoom]?.displayLabel || hoveredRoom}
@@ -350,26 +362,26 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-[#0a6b45]" />
-              <span className="text-[#00484e] font-bold">Free Now</span>
+              <span className="text-[#00484e] font-bold">Free</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-[#b7791f]" />
-              <span className="text-[#00484e] font-bold">Class Starts in &lt; 30m</span>
+              <span className="text-[#00484e] font-bold">Class starts within 30 min</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-[#e8806a]" />
-              <span className="text-[#00484e] font-bold">In Use (Class / Lab)</span>
+              <span className="text-[#00484e] font-bold">In use</span>
             </div>
           </div>
 
           {/* Rotation Controller Slider */}
           <div className="flex items-center gap-2.5">
             <Compass className="w-4 h-4 text-[#00484e]" />
-            <span>3D Angle:</span>
+            <span>Rotate:</span>
             <input
               type="range"
-              min="-75"
-              max="75"
+              min="-80"
+              max="80"
               value={rotateZ}
               onChange={(e) => setRotateZ(Number(e.target.value))}
               className="w-28 accent-[#00484e] cursor-pointer"
@@ -381,56 +393,85 @@ export const CampusMap3D: React.FC<CampusMap3DProps> = ({
         </div>
       </div>
 
-      {/* Selected Room Quick Action Card under 3D map */}
-      {selectedRoomStatus ? (
-        <div className="bg-[#fdfbfa] border border-[#b7cdc3] rounded-2xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in duration-200">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#5f7377]">
-                Selected Room
-              </span>
+      {/* Selected Room Live Countdown Card (matches #det in original HTML) */}
+      <div className="bg-[#fdfbfa] border border-[#b7cdc3] rounded-2xl p-6 shadow-xs">
+        {selectedRoomStatus ? (
+          <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#5f7377] block">
+                  SELECTED ROOM
+                </span>
+                <h3 className="text-2xl font-black text-[#00484e] mt-0.5">
+                  {ROOM_METADATA[selectedRoomStatus.roomId]?.displayLabel || selectedRoomStatus.roomId}
+                </h3>
+                <p className="text-xs font-semibold text-[#5f7377] mt-0.5">
+                  {getFloorName(selectedRoomStatus.floor)} · {selectedRoomStatus.text}
+                </p>
+              </div>
+
               <span
-                className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                className={`px-3 py-1 rounded-full text-xs font-extrabold tracking-wide ${
                   selectedRoomStatus.free
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-rose-100 text-rose-800'
+                    ? 'bg-[#cfe8dc] text-[#0a6b45]'
+                    : 'bg-[#fcdcd3] text-[#d4644c]'
                 }`}
               >
-                {selectedRoomStatus.free ? 'FREE RIGHT NOW' : 'CURRENTLY OCCUPIED'}
+                {selectedRoomStatus.free ? 'FREE' : 'BUSY'}
               </span>
             </div>
-            <h3 className="text-2xl font-extrabold text-[#00484e] mt-1">
-              {ROOM_METADATA[selectedRoomStatus.roomId]?.displayLabel || selectedRoomStatus.roomId}
-            </h3>
-            <p className="text-sm text-[#00484e] mt-0.5">{selectedRoomStatus.text}</p>
-          </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            {selectedRoomStatus.free && (
+            {/* Big Countdown Box */}
+            <div className="bg-[#00484e] text-white rounded-xl p-5 shadow-xs flex flex-col gap-1">
+              <small className="text-[#a9cfcf] tracking-wider font-bold text-[11px] uppercase block">
+                {selectedRoomStatus.free ? 'FREE FOR' : 'IN USE FOR'}
+              </small>
+              <div className="text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums font-mono py-1">
+                {countdownSeconds !== null
+                  ? formatCountdown(countdownSeconds)
+                  : 'All day'}
+              </div>
+              <small className="text-[#a9cfcf]/90 text-xs">
+                {selectedRoomStatus.until === null
+                  ? 'No more classes today'
+                  : selectedRoomStatus.free
+                  ? 'Until the next class starts here'
+                  : 'Until this class ends'}
+              </small>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              {selectedRoomStatus.free && (
+                <button
+                  type="button"
+                  onClick={() => onShareSquad(selectedRoomStatus.roomId)}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-[#e8806a] hover:bg-[#d4644c] text-white font-bold text-sm px-5 py-3 rounded-xl shadow-xs transition-colors"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Call the squad on WhatsApp</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => onShareSquad(selectedRoomStatus.roomId)}
-                className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 bg-[#e8806a] hover:bg-[#d4644c] text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-xs transition-colors"
+                onClick={() => onOpenDetailModal(selectedRoomStatus.roomId)}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-white border border-[#b7cdc3] text-[#00484e] hover:bg-[#f0f5f2] font-bold text-sm px-5 py-3 rounded-xl shadow-2xs transition-colors"
               >
-                <Share2 className="w-4 h-4" />
-                <span>Call Squad on WhatsApp</span>
+                <Calendar className="w-4 h-4" />
+                <span>Full Day Schedule</span>
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onSelectRoom(selectedRoomStatus.roomId)}
-              className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 bg-[#00484e] hover:bg-[#00383d] text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-xs transition-colors"
-            >
-              <Clock className="w-4 h-4" />
-              <span>Full Schedule & Countdown</span>
-            </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="p-4 bg-white/70 border border-[#b7cdc3]/60 rounded-xl text-center text-xs font-medium text-[#5f7377]">
-          💡 Click any colored room tile on the 3D map above to inspect its real-time countdown and daily schedule.
-        </div>
-      )}
+        ) : (
+          <div className="py-6 text-center text-sm font-semibold text-[#5f7377]">
+            Tap a room on the map to see its countdown.
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs text-[#5f7377] px-1">
+        Scroll or use + / − to zoom, and drag the map to move it. TB is a separate block, drawn beside the IST block.
+      </p>
     </div>
   );
 };

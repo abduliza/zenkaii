@@ -22,16 +22,11 @@ import { RoomCard } from './components/RoomCard';
 import { CampusMap3D } from './components/CampusMap3D';
 import { RoomDetailModal } from './components/RoomDetailModal';
 import { MasterTimetableModal } from './components/MasterTimetableModal';
+import { SquadShareModal } from './components/SquadShareModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import {
-  Building2,
-  Sparkles,
-  LayoutGrid,
-  Box,
   Calendar,
   AlertCircle,
-  Clock,
-  Compass,
 } from 'lucide-react';
 
 export default function App() {
@@ -61,6 +56,8 @@ export default function App() {
   // UI Views & Modals
   const [activeView, setActiveView] = useState<'list' | 'map' | 'timetables'>('list');
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [activeModalRoomId, setActiveModalRoomId] = useState<string | null>(null);
+  const [shareSquadRoomId, setShareSquadRoomId] = useState<string | null>(null);
   const [showTimetablesModal, setShowTimetablesModal] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -121,7 +118,7 @@ export default function App() {
         return false;
       }
 
-      // Search query filter
+      // Direct search query filter (room number, tag, floor)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesRoom =
@@ -190,16 +187,17 @@ export default function App() {
     }
     if (parsed.roomNumber) {
       setSelectedRoomId(parsed.roomNumber);
+      setActiveModalRoomId(parsed.roomNumber);
     }
 
     addToast(
       'success',
-      'Smart Filter Applied',
+      'Filter Applied',
       parsed.tagsSummary.length ? parsed.tagsSummary.join(' · ') : 'Criteria updated'
     );
   };
 
-  // Squad WhatsApp share action
+  // Squad WhatsApp share action (safe, avoids window.open)
   const handleShareSquad = (roomId: string) => {
     const s = allStatuses[roomId];
     const meta = ROOM_METADATA[roomId];
@@ -209,19 +207,18 @@ export default function App() {
       s.until !== null ? `until ${format12Hour(s.until)}` : 'for the rest of the day';
     const message = `📍 Heading to ${meta?.displayLabel || roomId}. It's free ${untilText}. Come fast!`;
 
-    // Try web share if available and user on mobile, else WhatsApp URL
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
-
-    // Also copy to clipboard for convenience
+    // Copy to clipboard for immediate convenience
     if (navigator.clipboard) {
       navigator.clipboard.writeText(message).catch(() => {});
     }
 
+    // Open clean SquadShareModal
+    setShareSquadRoomId(roomId);
+
     addToast(
       'success',
       'Squad Invite Ready!',
-      `Copied to clipboard and opened WhatsApp for ${meta?.displayLabel || roomId}`
+      `Copied message for ${meta?.displayLabel || roomId}`
     );
   };
 
@@ -241,6 +238,10 @@ export default function App() {
       .map(Number)
       .sort((a, b) => a - b);
   }, [roomsByFloor]);
+
+  const currentSecondCounter = isSimulated
+    ? effectiveTimeMinutes * 60 + (deviceSeconds % 60)
+    : deviceSeconds;
 
   return (
     <div className="min-h-screen bg-[#f1f6f2] flex flex-col font-sans">
@@ -277,6 +278,7 @@ export default function App() {
               searchQuery={searchQuery}
               totalRooms={ALL_ROOM_IDS.length}
               freeRoomsCount={freeRoomsCount}
+              matchingCount={filteredRoomIds.length}
               isSimulated={isSimulated}
               onSelectFloor={setSelectedFloor}
               onSelectDay={handleSelectDay}
@@ -328,7 +330,9 @@ export default function App() {
                   selectedRoomId={selectedRoomId}
                   currentDay={effectiveDay}
                   currentTimeMinutes={effectiveTimeMinutes}
+                  currentSecondCounter={currentSecondCounter}
                   onSelectRoom={setSelectedRoomId}
+                  onOpenDetailModal={setActiveModalRoomId}
                   onSelectFloor={setSelectedFloor}
                   onShareSquad={handleShareSquad}
                 />
@@ -395,7 +399,7 @@ export default function App() {
                               status={allStatuses[roomId]}
                               currentDay={effectiveDay}
                               currentTimeMinutes={effectiveTimeMinutes}
-                              onSelectRoom={setSelectedRoomId}
+                              onSelectRoom={setActiveModalRoomId}
                               onShareSquad={handleShareSquad}
                             />
                           ))}
@@ -411,18 +415,14 @@ export default function App() {
       </main>
 
       {/* Room Detail Modal with Countdown & Full Schedule */}
-      {selectedRoomId && (
+      {activeModalRoomId && (
         <RoomDetailModal
-          roomId={selectedRoomId}
-          status={allStatuses[selectedRoomId] || null}
+          roomId={activeModalRoomId}
+          status={allStatuses[activeModalRoomId] || null}
           currentDay={effectiveDay}
           currentTimeMinutes={effectiveTimeMinutes}
-          currentSecondCounter={
-            isSimulated
-              ? effectiveTimeMinutes * 60 + (deviceSeconds % 60)
-              : deviceSeconds
-          }
-          onClose={() => setSelectedRoomId(null)}
+          currentSecondCounter={currentSecondCounter}
+          onClose={() => setActiveModalRoomId(null)}
           onShareWhatsApp={handleShareSquad}
           onCopySquadMessage={(text) => {
             if (navigator.clipboard) {
@@ -433,12 +433,21 @@ export default function App() {
         />
       )}
 
+      {/* Squad Share Modal */}
+      {shareSquadRoomId && (
+        <SquadShareModal
+          roomId={shareSquadRoomId}
+          status={allStatuses[shareSquadRoomId] || null}
+          onClose={() => setShareSquadRoomId(null)}
+        />
+      )}
+
       {/* Master Class Timetables Modal */}
       {showTimetablesModal && (
         <MasterTimetableModal
           onClose={() => setShowTimetablesModal(false)}
           onSelectRoom={(roomId) => {
-            setSelectedRoomId(roomId);
+            setActiveModalRoomId(roomId);
             setShowTimetablesModal(false);
           }}
         />

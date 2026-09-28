@@ -26,7 +26,8 @@
 .perspective-stage {
   perspective: 2200px;
   perspective-origin: 50% 50%;
-  transform-style: preserve-3d;
+  position: relative;
+  overflow: hidden;
 }
 
 .preserve-3d {

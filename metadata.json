@@ -2,5 +2,7 @@
   "name": "RoomPulse - Campus Room Finder",
   "description": "Real-time campus empty room finder with interactive 3D floor map, live timetable tracking, and squad sharing.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

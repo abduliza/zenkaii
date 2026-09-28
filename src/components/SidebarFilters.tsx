@@ -11,6 +11,7 @@ import {
   Wind,
   Layers,
   ChevronDown,
+  X,
 } from 'lucide-react';
 import {
   DAYS,
@@ -33,6 +34,7 @@ interface SidebarFiltersProps {
   searchQuery: string;
   totalRooms: number;
   freeRoomsCount: number;
+  matchingCount: number;
   isSimulated: boolean;
   onSelectFloor: (floor: number | null) => void;
   onSelectDay: (day: DayOfWeek) => void;
@@ -55,6 +57,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
   searchQuery,
   totalRooms,
   freeRoomsCount,
+  matchingCount,
   isSimulated,
   onSelectFloor,
   onSelectDay,
@@ -66,12 +69,11 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
   onResetToLive,
   onApplyParsedQuery,
 }) => {
-  const [naturalQueryInput, setNaturalQueryInput] = useState('');
+  const [naturalQueryInput, setNaturalQueryInput] = useState(searchQuery || '');
   const [activeParsedTags, setActiveParsedTags] = useState<string[]>([]);
-  const [showFiltersMobile, setShowFiltersMobile] = useState(false);
 
   const floorsList = [
-    { id: null, label: 'All Floors' },
+    { id: null, label: 'All' },
     { id: 1, label: '1F' },
     { id: 2, label: '2F' },
     { id: 3, label: '3F' },
@@ -82,7 +84,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
     { id: 8, label: 'TB' },
   ];
 
-  const quickDurationPresets = [0, 30, 60, 90, 120];
+  const quickDurationPresets = [0, 30, 45, 60, 90, 120];
 
   const quickPeriodJumps = [
     { label: 'P1 (9:00)', mins: 540 },
@@ -92,20 +94,41 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
     { label: 'P8 (15:10)', mins: 910 },
   ];
 
+  const executeQuery = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      onSearchChange('');
+      setActiveParsedTags([]);
+      return;
+    }
+
+    const parsed = parseNaturalQuery(trimmed);
+    if (parsed.tagsSummary.length > 0) {
+      setActiveParsedTags(parsed.tagsSummary);
+      onApplyParsedQuery(parsed);
+      // Clear direct string query so it doesn't try exact-matching natural language sentences
+      onSearchChange('');
+    } else {
+      // It's a direct room/keyword query (e.g. "602", "lab", "TB")
+      onSearchChange(trimmed);
+      setActiveParsedTags([`Query: "${trimmed}"`]);
+    }
+  };
+
   const handleNaturalSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!naturalQueryInput.trim()) return;
-
-    const parsed = parseNaturalQuery(naturalQueryInput);
-    setActiveParsedTags(parsed.tagsSummary);
-    onApplyParsedQuery(parsed);
+    executeQuery(naturalQueryInput);
   };
 
   const handleSuggestionClick = (query: string) => {
     setNaturalQueryInput(query);
-    const parsed = parseNaturalQuery(query);
-    setActiveParsedTags(parsed.tagsSummary);
-    onApplyParsedQuery(parsed);
+    executeQuery(query);
+  };
+
+  const handleClear = () => {
+    setNaturalQueryInput('');
+    onSearchChange('');
+    setActiveParsedTags([]);
   };
 
   const timeStringValue = formatMinutesToHM(currentTimeMinutes);
@@ -137,58 +160,81 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
             type="text"
             value={naturalQueryInput}
             onChange={(e) => {
-              setNaturalQueryInput(e.target.value);
-              onSearchChange(e.target.value);
+              const val = e.target.value;
+              setNaturalQueryInput(val);
+              // If it's a short specific room number like "602" or "TB106", filter immediately
+              if (/^[0-9]{1,3}$|^tb[0-9]{0,3}$/i.test(val.trim())) {
+                onSearchChange(val.trim());
+              } else if (!val.trim()) {
+                onSearchChange('');
+                setActiveParsedTags([]);
+              }
             }}
-            placeholder="e.g. Free room on 4th floor for 90 mins at 3pm"
-            className="w-full pl-9 pr-20 py-2.5 bg-white border border-[#b7cdc3] rounded-xl text-sm text-[#00484e] placeholder:text-[#5f7377]/70 focus:outline-hidden focus:ring-2 focus:ring-[#e8806a] focus:border-transparent transition-all shadow-2xs"
+            placeholder="Free room on 4th floor for 90 mins at 3pm"
+            className="w-full pl-9 pr-24 py-2.5 bg-white border border-[#b7cdc3] rounded-xl text-sm text-[#00484e] placeholder:text-[#5f7377]/60 focus:outline-hidden focus:ring-2 focus:ring-[#e8806a] focus:border-transparent transition-all shadow-2xs"
           />
           <Search className="w-4 h-4 text-[#5f7377] absolute left-3 top-1/2 -translate-y-1/2" />
-          <button
-            type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1 bg-[#00484e] hover:bg-[#00383d] text-white text-xs font-semibold rounded-lg transition-colors"
-          >
-            Find
-          </button>
+
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {naturalQueryInput && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="p-1 text-[#5f7377] hover:text-[#00484e] rounded-full transition-colors"
+                title="Clear query"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              type="submit"
+              className="px-3 py-1 bg-[#00484e] hover:bg-[#00383d] text-white text-xs font-bold rounded-lg transition-colors shadow-2xs"
+            >
+              Search →
+            </button>
+          </div>
         </form>
 
         {/* Suggestion prompt chips */}
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => handleSuggestionClick('Free on 4th floor for 60 min')}
+            onClick={() => handleSuggestionClick('Free room on the 4th floor for 90 minutes at 3pm')}
             className="text-[11px] bg-[#e6eeea]/70 hover:bg-[#e6eeea] text-[#00484e] px-2.5 py-1 rounded-full border border-[#b7cdc3]/60 transition-colors"
           >
-            4th floor · 1 hour
+            4th floor for 90m at 3pm
           </button>
           <button
             type="button"
-            onClick={() => handleSuggestionClick('TB block seminar at 2pm')}
+            onClick={() => handleSuggestionClick('TB block for 60 min')}
             className="text-[11px] bg-[#e6eeea]/70 hover:bg-[#e6eeea] text-[#00484e] px-2.5 py-1 rounded-full border border-[#b7cdc3]/60 transition-colors"
           >
-            TB block at 2pm
+            TB block for 1h
           </button>
           <button
             type="button"
-            onClick={() => handleSuggestionClick('AC room for 90 minutes')}
+            onClick={() => handleSuggestionClick('AC room for 60 minutes')}
             className="text-[11px] bg-[#e6eeea]/70 hover:bg-[#e6eeea] text-[#00484e] px-2.5 py-1 rounded-full border border-[#b7cdc3]/60 transition-colors"
           >
-            AC room · 90 min
+            AC room for 1h
           </button>
         </div>
 
-        {/* Active Parsed Tags */}
+        {/* Active Parsed Feedback Bar */}
         {activeParsedTags.length > 0 && (
-          <div className="mt-2.5 p-2 bg-[#e6eeea]/50 rounded-xl border border-[#b7cdc3]/40 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] uppercase font-bold text-[#5f7377]">Applied:</span>
+          <div className="mt-2.5 p-2 bg-[#e6eeea]/60 rounded-xl border border-[#b7cdc3]/50 flex flex-wrap items-center gap-1.5 animate-in fade-in duration-100">
+            <span className="text-[10px] uppercase font-bold text-[#5f7377]">Understood:</span>
             {activeParsedTags.map((tag, idx) => (
               <span
                 key={idx}
-                className="text-xs font-medium bg-white text-[#00484e] px-2 py-0.5 rounded-md border border-[#b7cdc3]/60 shadow-2xs"
+                className="text-xs font-semibold bg-white text-[#00484e] px-2 py-0.5 rounded-md border border-[#b7cdc3]/60 shadow-2xs"
               >
                 {tag}
               </span>
             ))}
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md ml-auto">
+              {matchingCount} match{matchingCount !== 1 ? 'es' : ''}
+            </span>
           </div>
         )}
       </div>
@@ -221,7 +267,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#5f7377]">
             <Building className="w-3.5 h-3.5" />
-            <span>Select Floor</span>
+            <span>Floors</span>
           </div>
           {selectedFloor !== null && (
             <button
@@ -232,7 +278,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
             </button>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {floorsList.map((f) => {
             const isSelected = selectedFloor === f.id;
             return (
@@ -240,9 +286,9 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
                 key={String(f.id)}
                 type="button"
                 onClick={() => onSelectFloor(f.id)}
-                className={`py-2 px-2 text-xs font-bold rounded-xl transition-all border text-center ${
+                className={`min-w-[42px] py-1.5 px-3 text-xs font-bold rounded-full transition-all border text-center ${
                   isSelected
-                    ? 'bg-[#e8806a] border-[#e8806a] text-white shadow-xs scale-[1.02]'
+                    ? 'bg-[#e8806a] border-[#e8806a] text-white shadow-xs'
                     : 'bg-white border-[#b7cdc3] text-[#00484e] hover:bg-[#e6eeea]/50'
                 }`}
               >
@@ -259,7 +305,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
       <div>
         <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#5f7377] mb-2">
           <CalendarDays className="w-3.5 h-3.5" />
-          <span>Day of Week</span>
+          <span>Day</span>
         </div>
         <div className="grid grid-cols-7 gap-1">
           {DAYS.map((d) => {
@@ -287,7 +333,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#5f7377]">
             <Clock className="w-3.5 h-3.5" />
-            <span>Target Time</span>
+            <span>Time</span>
           </div>
           <span className="text-xs font-bold text-[#00484e]">
             {format12Hour(currentTimeMinutes)}
@@ -323,10 +369,10 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold uppercase tracking-wider text-[#5f7377]">
-            Minimum Free Window
+            Free for at least
           </span>
           <span className="text-xs font-bold text-[#00484e]">
-            {minDurationMinutes === 0 ? 'Any duration' : `${minDurationMinutes} minutes`}
+            {minDurationMinutes === 0 ? '0 (Free right now)' : `${minDurationMinutes} minutes`}
           </span>
         </div>
         <div className="flex gap-1.5">
@@ -343,12 +389,27 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
                     : 'bg-white border-[#b7cdc3] text-[#00484e] hover:bg-[#e6eeea]/50'
                 }`}
               >
-                {dur === 0 ? 'Now' : `${dur}m`}
+                {dur === 0 ? '0m' : `${dur}m`}
               </button>
             );
           })}
         </div>
+        <small className="text-[11px] text-[#5f7377] block mt-1">
+          Minutes · 0 means free right now
+        </small>
       </div>
+
+      {/* Live Time Button */}
+      {isSimulated && (
+        <button
+          type="button"
+          onClick={onResetToLive}
+          className="w-full py-2.5 px-4 bg-transparent border border-[#b7cdc3] hover:border-[#00484e] text-[#00484e] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Use live time</span>
+        </button>
+      )}
 
       {/* Feature Toggles */}
       <div className="space-y-2 pt-1">
@@ -381,8 +442,7 @@ export const SidebarFilters: React.FC<SidebarFiltersProps> = ({
 
       <div className="mt-auto pt-3 border-t border-[#b7cdc3]/40 text-xs text-[#5f7377] leading-relaxed">
         <p>
-          💡 <strong>Pro Tip:</strong> Data is synchronized with all 10 departmental timetables.
-          A free room is not an official reservation; please yield politely if a lab session or scheduled faculty activity requires the hall.
+          Based on 10 class timetables · 2026–27 period times. A free room is not a reservation.
         </p>
       </div>
     </div>
